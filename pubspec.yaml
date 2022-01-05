@@ -1,8 +1,8 @@
-name: folly_fields
+name: rfid_fields
 description: Basic form fields and utilities.
 version: 0.2.21+66
 # author:
-homepage: https://edufolly.github.io/folly_fields/
+homepage: https://github.com/RFIDBrasil-TI/rfid-fields
 
 # TODO - Remove
 publish_to: 'none'
