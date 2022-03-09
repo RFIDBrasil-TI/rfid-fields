@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:folly_fields/crud/abstract_consumer.dart';
-import 'package:folly_fields/crud/abstract_function.dart';
 import 'package:folly_fields/crud/abstract_model.dart';
 import 'package:folly_fields/crud/abstract_route.dart';
 import 'package:folly_fields/crud/abstract_ui_builder.dart';
@@ -51,17 +50,13 @@ abstract class AbstractList<
     C consumer,
     bool edit,
   )? onLongPress;
-  final Map<AbstractRoute, ActionFunction<T>>? actionFunctions;
-  final String? searchFieldLabel;
-  final TextStyle? searchFieldStyle;
-  final InputDecorationTheme? searchFieldDecorationTheme;
-  final TextInputType? searchKeyboardType;
-  final TextInputAction searchTextInputAction;
+  final Map<AbstractRoute,
+      Future<bool> Function(BuildContext context, T model)>? actionFunctions;
 
   ///
   ///
   ///
-  static const TextStyle suggestionStyle = TextStyle(
+  static final TextStyle SUGGESTION_STYLE = const TextStyle(
     fontStyle: FontStyle.italic,
   );
 
@@ -84,13 +79,7 @@ abstract class AbstractList<
     this.actionRoutes = const <AbstractRoute>[],
     this.onLongPress,
     this.actionFunctions,
-    this.searchFieldLabel,
-    this.searchFieldStyle,
-    this.searchFieldDecorationTheme,
-    this.searchKeyboardType,
-    this.searchTextInputAction = TextInputAction.search,
-  })  : assert(searchFieldStyle == null || searchFieldDecorationTheme == null),
-        super(key: key);
+  }) : super(key: key);
 
   ///
   ///
@@ -166,7 +155,8 @@ class _AbstractListState<
   ///
   Future<void> _loadPermissions(BuildContext context) async {
     if (widget.actionFunctions != null) {
-      for (MapEntry<AbstractRoute, ActionFunction<T>> entry
+      for (MapEntry<AbstractRoute,
+              Future<bool> Function(BuildContext context, T model)> entry
           in widget.actionFunctions!.entries) {
         AbstractRoute route = entry.key;
 
@@ -302,7 +292,7 @@ class _AbstractListState<
             _actions.add(
               IconButton(
                 tooltip: 'Inverter seleção',
-                icon: const Icon(Icons.select_all),
+                icon: Icon(Icons.select_all),
                 onPressed: () {
                   for (T model in _globalItems) {
                     if (selections.containsKey(model.id)) {
@@ -322,12 +312,12 @@ class _AbstractListState<
             _actions.add(
               IconButton(
                 tooltip: 'Pesquisar ${widget.uiBuilder.getSuperSingle()}',
-                icon: const Icon(Icons.search),
+                icon: Icon(Icons.search),
                 onPressed: () {
                   showSearch<T?>(
                     context: context,
                     delegate: InternalSearch<T, UI, C>(
-                      buildResultItem: _buildResultItem,
+                      buildResultItem: _newBuildResultItem,
                       canDelete: (T model) =>
                           _delete &&
                           FollyFields().isWeb &&
@@ -337,12 +327,6 @@ class _AbstractListState<
                       itemsPerPage: widget.itemsPerPage,
                       uiBuilder: widget.uiBuilder,
                       consumer: widget.consumer,
-                      searchFieldLabel: widget.searchFieldLabel,
-                      searchFieldStyle: widget.searchFieldStyle,
-                      searchFieldDecorationTheme:
-                          widget.searchFieldDecorationTheme,
-                      keyboardType: widget.searchKeyboardType,
-                      textInputAction: widget.searchTextInputAction,
                     ),
                   ).then((T? entity) {
                     if (entity != null) {
@@ -363,7 +347,7 @@ class _AbstractListState<
               _actions.add(
                 IconButton(
                   tooltip: 'Selecionar ${widget.uiBuilder.getSuperPlural()}',
-                  icon: const FaIcon(FontAwesomeIcons.check),
+                  icon: FaIcon(FontAwesomeIcons.check),
                   onPressed: () => Navigator.of(context)
                       .pop(List<T>.from(selections.values)),
                 ),
@@ -371,36 +355,38 @@ class _AbstractListState<
             }
           } else {
             /// Action Routes
-            for (AbstractRoute route in widget.actionRoutes) {
-              _actions.add(
-                // TODO - Create an Action Route component.
-                FutureBuilder<ConsumerPermission>(
-                  future: widget.consumer.checkPermission(
-                    context,
-                    route.routeName,
+            widget.actionRoutes.forEach(
+              (AbstractRoute route) {
+                _actions.add(
+                  // TODO - Create an Action Route component.
+                  FutureBuilder<ConsumerPermission>(
+                    future: widget.consumer.checkPermission(
+                      context,
+                      route.routeName,
+                    ),
+                    builder: (
+                      BuildContext context,
+                      AsyncSnapshot<ConsumerPermission> snapshot,
+                    ) {
+                      if (snapshot.hasData) {
+                        ConsumerPermission permission = snapshot.data!;
+
+                        return permission.view
+                            ? IconButton(
+                                tooltip: permission.name,
+                                icon: IconHelper.faIcon(permission.iconName),
+                                onPressed: () =>
+                                    Navigator.of(context).pushNamed(route.path),
+                              )
+                            : Container(width: 0, height: 0);
+                      }
+
+                      return Container(width: 0, height: 0);
+                    },
                   ),
-                  builder: (
-                    BuildContext context,
-                    AsyncSnapshot<ConsumerPermission> snapshot,
-                  ) {
-                    if (snapshot.hasData) {
-                      ConsumerPermission permission = snapshot.data!;
-
-                      return permission.view
-                          ? IconButton(
-                              tooltip: permission.name,
-                              icon: IconHelper.faIcon(permission.iconName),
-                              onPressed: () =>
-                                  Navigator.of(context).pushNamed(route.path),
-                            )
-                          : const SizedBox(width: 0, height: 0);
-                    }
-
-                    return const SizedBox(width: 0, height: 0);
-                  },
-                ),
-              );
-            }
+                );
+              },
+            );
 
             /// Botão Adicionar
             if (_insert) {
@@ -408,7 +394,7 @@ class _AbstractListState<
                 _actions.add(
                   IconButton(
                     tooltip: 'Adicionar ${widget.uiBuilder.getSuperSingle()}',
-                    icon: const FaIcon(FontAwesomeIcons.plus),
+                    icon: FaIcon(FontAwesomeIcons.plus),
                     onPressed: _addEntity,
                   ),
                 );
@@ -416,7 +402,7 @@ class _AbstractListState<
                 _fabAdd = FloatingActionButton(
                   tooltip: 'Adicionar ${widget.uiBuilder.getSuperSingle()}',
                   onPressed: _addEntity,
-                  child: const FaIcon(FontAwesomeIcons.plus),
+                  child: FaIcon(FontAwesomeIcons.plus),
                 );
               }
             }
@@ -445,12 +431,12 @@ class _AbstractListState<
                         isAlwaysShown: FollyFields().isWeb,
                         child: ListView.separated(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.all(16.0),
+                          padding: EdgeInsets.all(16.0),
                           controller: _scrollController,
                           itemBuilder: (BuildContext context, int index) {
                             /// Atualizando...
                             if (index >= _globalItems.length) {
-                              return const SizedBox(
+                              return Container(
                                 height: 80,
                                 child: Center(
                                   child: CircularProgressIndicator(),
@@ -497,7 +483,7 @@ class _AbstractListState<
                               );
                             }
                           },
-                          separatorBuilder: (_, __) => const FollyDivider(),
+                          separatorBuilder: (_, __) => FollyDivider(),
                           itemCount: itemCount,
                         ),
                       ),
@@ -515,10 +501,102 @@ class _AbstractListState<
               widget.uiBuilder.buildBottomNavigationBar(context),
           body: widget.uiBuilder.buildBackgroundContainer(
             context,
-            const WaitingMessage(message: 'Consultando...'),
+            WaitingMessage(message: 'Consultando...'),
           ),
         );
       },
+    );
+  }
+
+  Widget _newBuildResultItem({
+    required T model,
+    required bool selection,
+    required bool canDelete,
+    Future<void> Function()? afterDeleteRefresh,
+    Function? onTap,
+  }) {
+    return ListTile(
+      leading: Column(
+        mainAxisSize: MainAxisSize.max,
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          widget.multipleSelection && onTap == null
+              ? FaIcon(
+                  selection
+                      ? FontAwesomeIcons.checkCircle
+                      : FontAwesomeIcons.circle,
+                )
+              : widget.uiBuilder.getLeading(model),
+        ],
+      ),
+      title: widget.uiBuilder.getTitle(model),
+      subtitle: widget.uiBuilder.getSubtitle(model),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          ...permissions.entries.map(
+            (MapEntry<ConsumerPermission, AbstractRoute> entry) {
+              ConsumerPermission permission = entry.key;
+              // TODO - Create an Action Route component.
+              return FutureBuilder<bool>(
+                initialData: false,
+                future: widget.actionFunctions![entry.value]!(context, model),
+                builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
+                  if (snapshot.hasData && snapshot.data!) {
+                    return IconButton(
+                      tooltip: permission.name,
+                      icon: IconHelper.faIcon(permission.iconName),
+                      onPressed: () async {
+                        dynamic refresh = await Navigator.of(context).pushNamed(
+                          entry.value.path,
+                          arguments: model,
+                        );
+
+                        if (refresh is bool && refresh) {
+                          await _loadData(context, clear: true);
+                        }
+                      },
+                    );
+                  }
+                  return Container(width: 0, height: 0);
+                },
+              );
+            },
+          ),
+          if (canDelete)
+            IconButton(
+              icon: Icon(FontAwesomeIcons.trashAlt),
+              onPressed: () async {
+                bool refresh = await _deleteEntity(model, ask: true);
+                if (afterDeleteRefresh != null && refresh) {
+                  await afterDeleteRefresh();
+                }
+              },
+            ),
+        ],
+      ),
+      onTap: () {
+        _internalRoute(model, !selection);
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              actions: <Widget>[
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Sair'),
+                )
+              ],
+              content: Text('${model.toString()} selecionado!'),
+            );
+          },
+        );
+      },
+      onLongPress:
+          widget.onLongPress == null ? null : () => _internalLongPress(model),
     );
   }
 
@@ -557,37 +635,35 @@ class _AbstractListState<
           ...permissions.entries.map(
             (MapEntry<ConsumerPermission, AbstractRoute> entry) {
               ConsumerPermission permission = entry.key;
-              ActionFunction<T> actionFunction =
-                  widget.actionFunctions![entry.value]!;
               // TODO - Create an Action Route component.
               return FutureBuilder<bool>(
                 initialData: false,
-                future: actionFunction.showButton(context, model),
+                future: widget.actionFunctions![entry.value]!(context, model),
                 builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
                   if (snapshot.hasData && snapshot.data!) {
                     return IconButton(
                       tooltip: permission.name,
                       icon: IconHelper.faIcon(permission.iconName),
                       onPressed: () async {
-                        Widget widget =
-                            await actionFunction.onPressed(context, model);
-
-                        await Navigator.of(context).push(
-                          MaterialPageRoute<dynamic>(builder: (_) => widget),
+                        dynamic refresh = await Navigator.of(context).pushNamed(
+                          entry.value.path,
+                          arguments: model,
                         );
 
-                        await _loadData(context, clear: true);
+                        if (refresh is bool && refresh) {
+                          await _loadData(context, clear: true);
+                        }
                       },
                     );
                   }
-                  return const SizedBox(width: 0, height: 0);
+                  return Container(width: 0, height: 0);
                 },
               );
             },
           ),
           if (canDelete)
             IconButton(
-              icon: const Icon(FontAwesomeIcons.trashAlt),
+              icon: Icon(FontAwesomeIcons.trashAlt),
               onPressed: () async {
                 bool refresh = await _deleteEntity(model, ask: true);
                 if (afterDeleteRefresh != null && refresh) {
@@ -759,32 +835,7 @@ class InternalSearch<
     required this.qsParam,
     required this.forceOffline,
     required this.itemsPerPage,
-    required String? searchFieldLabel,
-    required TextStyle? searchFieldStyle,
-    required InputDecorationTheme? searchFieldDecorationTheme,
-    required TextInputType? keyboardType,
-    required TextInputAction textInputAction,
-  }) : super(
-          searchFieldLabel: searchFieldLabel,
-          searchFieldStyle: searchFieldStyle,
-          searchFieldDecorationTheme: searchFieldDecorationTheme,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-        );
-
-  ///
-  ///
-  ///
-  @override
-  ThemeData appBarTheme(BuildContext context) {
-    final ThemeData theme = super.appBarTheme(context);
-
-    return theme.copyWith(
-      appBarTheme: theme.appBarTheme.copyWith(
-        backgroundColor: theme.colorScheme.surface,
-      ),
-    );
-  }
+  });
 
   ///
   ///
@@ -793,7 +844,7 @@ class InternalSearch<
   List<Widget> buildActions(BuildContext context) {
     return <Widget>[
       IconButton(
-        icon: const Icon(Icons.clear),
+        icon: Icon(Icons.clear),
         onPressed: () {
           query = '';
         },
@@ -807,7 +858,7 @@ class InternalSearch<
   @override
   Widget buildLeading(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.arrow_back),
+      icon: Icon(Icons.arrow_back),
       onPressed: () {
         close(context, null);
       },
@@ -825,7 +876,7 @@ class InternalSearch<
           Expanded(
             child: uiBuilder.buildBackgroundContainer(
               context,
-              const Center(
+              Center(
                 child: Text(
                   'Começe a sua pesquisa.\n'
                   'Digite ao menos 3 caracteres.',
@@ -863,21 +914,23 @@ class InternalSearch<
                     if (snapshot.data!.isNotEmpty) {
                       return ListView.separated(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16.0),
+                        padding: EdgeInsets.all(16.0),
                         itemBuilder: (BuildContext context, int index) {
                           return buildResultItem(
                             model: snapshot.data![index],
                             selection: false,
                             canDelete: canDelete(snapshot.data![index]),
-                            onTap: (W entity) => close(context, entity),
+                            onTap: (W entity) {
+                              debugPrint('$entity');
+                            },
                             afterDeleteRefresh: () async => query += '%',
                           );
                         },
-                        separatorBuilder: (_, __) => const FollyDivider(),
+                        separatorBuilder: (_, __) => FollyDivider(),
                         itemCount: snapshot.data!.length,
                       );
                     } else {
-                      return const Center(
+                      return Center(
                         child: Text('Nenhum documento.'),
                       );
                     }
@@ -885,7 +938,7 @@ class InternalSearch<
 
                   // TODO - Tratar erro.
 
-                  return const WaitingMessage(message: 'Consultando...');
+                  return WaitingMessage(message: 'Consultando...');
                 },
               ),
             ),
@@ -907,7 +960,7 @@ class InternalSearch<
           Expanded(
             child: uiBuilder.buildBackgroundContainer(
               context,
-              const Center(
+              Center(
                 child: Text(
                   'Começe a sua pesquisa.\n'
                   'Digite ao menos 3 caracteres.',
@@ -955,8 +1008,7 @@ class InternalSearch<
                                 'Sugestões:',
                                 style: TextStyle(
                                   fontStyle: FontStyle.italic,
-                                  color:
-                                      Theme.of(context).colorScheme.secondary,
+                                  color: Theme.of(context).accentColor,
                                 ),
                               ),
                             ),
@@ -982,7 +1034,7 @@ class InternalSearch<
                           ],
                         );
                       } else {
-                        return const Center(
+                        return Center(
                           child: Text('Nenhum documento.'),
                         );
                       }
@@ -990,7 +1042,7 @@ class InternalSearch<
 
                     // TODO - Tratar erro.
 
-                    return const WaitingMessage(message: 'Consultando...');
+                    return WaitingMessage(message: 'Consultando...');
                   },
                 ),
               ),
