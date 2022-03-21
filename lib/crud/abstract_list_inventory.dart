@@ -13,11 +13,13 @@ import 'package:folly_fields/widgets/folly_divider.dart';
 import 'package:folly_fields/widgets/text_message.dart';
 import 'package:folly_fields/widgets/waiting_message.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:webapp/views/Home.dart';
+import 'package:webapp/utils/Config.dart';
 
 ///
 ///
 ///
-abstract class AbstractList<
+abstract class AbstractListInventory<
     T extends AbstractModel<Object>,
     UI extends AbstractUIBuilder<T>,
     C extends AbstractConsumer<T>> extends AbstractRoute {
@@ -63,7 +65,7 @@ abstract class AbstractList<
   ///
   ///
   ///
-  const AbstractList({
+  const AbstractListInventory({
     Key? key,
     required this.selection,
     required this.multipleSelection,
@@ -102,10 +104,9 @@ abstract class AbstractList<
 ///
 ///
 ///
-class _AbstractListState<
-    T extends AbstractModel<Object>,
-    UI extends AbstractUIBuilder<T>,
-    C extends AbstractConsumer<T>> extends State<AbstractList<T, UI, C>> {
+class _AbstractListState<T extends AbstractModel<Object>,
+        UI extends AbstractUIBuilder<T>, C extends AbstractConsumer<T>>
+    extends State<AbstractListInventory<T, UI, C>> {
   final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
       GlobalKey<RefreshIndicatorState>();
 
@@ -254,6 +255,11 @@ class _AbstractListState<
           return Scaffold(
             appBar: AppBar(
               title: _getScaffoldTitle(),
+              titleTextStyle: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Config.blue,
+              ),
             ),
             bottomNavigationBar:
                 widget.uiBuilder.buildBottomNavigationBar(context),
@@ -411,6 +417,26 @@ class _AbstractListState<
           return Scaffold(
             appBar: AppBar(
               title: _getScaffoldTitle(),
+              titleTextStyle: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Config.blue,
+              ),
+              leading: Builder(
+                builder: (BuildContext context) {
+                  return IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute<dynamic>(
+                          builder: (BuildContext context) => Home(),
+                        ),
+                      );
+                      ;
+                    },
+                  );
+                },
+              ),
               actions: _actions,
             ),
             bottomNavigationBar:
@@ -496,6 +522,11 @@ class _AbstractListState<
         return Scaffold(
           appBar: AppBar(
             title: _getScaffoldTitle(),
+            titleTextStyle: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Config.blue,
+            ),
           ),
           bottomNavigationBar:
               widget.uiBuilder.buildBottomNavigationBar(context),
